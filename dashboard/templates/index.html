@@ -5,6 +5,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Motor RUL Prediction Dashboard | PREC MACHINE AI</title>
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%23FFFDF1'><path d='M0 0h1v15h15v1H0V0zm10 3.5a.5.5 0 0 1 .5-.5h4a.5.5 0 0 1 .5.5v4a.5.5 0 0 1-1 0V4.9l-3.613 4.417a.5.5 0 0 1-.74.037L7.06 6.767l-3.656 5.027a.5.5 0 0 1-.808-.588l4-5.5a.5.5 0 0 1 .758-.06l2.609 2.61L13.445 4H10.5a.5.5 0 0 1-.5-.5z'/></svg>">
     <meta name="description"
         content="Advanced motor health prediction with uncertainty quantification using hybrid MSCAN + Transformer architecture">
     <!-- Bootstrap 5 CSS -->
@@ -18,85 +20,23 @@
 </head>
 
 <body>
-
     <!-- Navbar -->
     <nav class="navbar navbar-expand-lg navbar-light">
         <div class="container">
             <a class="navbar-brand fw-bold" href="#">
-                <i class="fas fa-cogs me-2"></i>PREC MACHINE AI
+                <i class="fas fa-cogs me-2"></i>
+                <span style="font-family: monospace;">VibraMind</span>
             </a>
-            <span class="badge bg-gradient-primary ms-3" id="modelBadge">Hybrid Model</span>
         </div>
     </nav>
-
     <div class="container my-5">
-
         <!-- Header Section -->
         <div class="row mb-5 text-center">
             <div class="col-lg-8 mx-auto">
                 <h1 class="display-4 fw-bold gradient-text">Motor Health Intelligence</h1>
                 <p class="lead text-muted">Multi-Task Prediction with Uncertainty Quantification</p>
-                <div class="d-flex justify-content-center gap-2 mt-3 flex-wrap">
-                    <span class="badge badge-feature"><i class="fas fa-brain me-1"></i>MSCAN + Transformer</span>
-                    <span class="badge badge-feature"><i class="fas fa-chart-area me-1"></i>Quantile Regression</span>
-                    <span class="badge badge-feature"><i class="fas fa-exchange-alt me-1"></i>Domain Adaptation</span>
-                    <span class="badge badge-feature"><i class="fas fa-tasks me-1"></i>Multi-Task Learning</span>
-                </div>
             </div>
         </div>
-
-        <!-- KPI Cards -->
-        <div class="row g-4 mb-5">
-            <div class="col-md-3">
-                <div class="card kpi-card h-100 text-center p-4">
-                    <div class="icon-box mb-3 mx-auto icon-rul">
-                        <i class="fas fa-hourglass-half"></i>
-                    </div>
-                    <h5>RUL Prediction</h5>
-                    <p class="text-muted small">With uncertainty bounds</p>
-                    <div class="d-flex justify-content-center gap-2 mt-2 flex-wrap">
-                        <span class="badge bg-secondary">Quantile Loss</span>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="card kpi-card h-100 text-center p-4">
-                    <div class="icon-box mb-3 mx-auto icon-hi">
-                        <i class="fas fa-heartbeat"></i>
-                    </div>
-                    <h5>Health Indicator</h5>
-                    <p class="text-muted small">Ensemble HI reconstruction</p>
-                    <div class="d-flex justify-content-center gap-2 mt-2">
-                        <span class="badge bg-secondary">RMS+Kurtosis+Spectral</span>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="card kpi-card h-100 text-center p-4">
-                    <div class="icon-box mb-3 mx-auto icon-speed">
-                        <i class="fas fa-tachometer-alt"></i>
-                    </div>
-                    <h5>Motor Speed</h5>
-                    <p class="text-muted small">Operating condition</p>
-                    <div class="d-flex justify-content-center gap-2 mt-2">
-                        <span class="badge bg-secondary">Auxiliary Task</span>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="card kpi-card h-100 text-center p-4">
-                    <div class="icon-box mb-3 mx-auto icon-voltage">
-                        <i class="fas fa-bolt"></i>
-                    </div>
-                    <h5>Voltage Load</h5>
-                    <p class="text-muted small">Electrical consumption</p>
-                    <div class="d-flex justify-content-center gap-2 mt-2">
-                        <span class="badge bg-secondary">Auxiliary Task</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-
         <!-- Main Prediction Interface -->
         <div class="row mb-5">
             <div class="col-lg-12">
@@ -328,13 +268,11 @@
                                     </div>
                                 </div>
                             </div>
-
                         </div>
                     </div>
                 </div>
             </div>
         </div>
-
         <!-- Training Visuals Section -->
         <h3 class="fw-bold mb-4 border-bottom pb-2 border-dark">Training Performance & Feature Analysis</h3>
         <div class="row g-4">
@@ -357,10 +295,7 @@
                 </div>
             </div>
         </div>
-
     </div>
-
-
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="/static/script.js"></script>
