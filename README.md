@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+
 # VibraMind: Advanced Industrial Motor Predictive Maintenance
 
 ![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)
@@ -94,9 +94,3 @@ The core model, `MSCAN_Hybrid`, features:
 ## 📊 Results
 The model achieves high accuracy in Health Indicator reconstruction (R² > 0.90) and provides robust RUL estimations even on unseen operating conditions through its Domain Adaptation layer.
 
----
-Developed by **PREC MACHINE AI** | Powered by DeepMind Advanced Agentic Coding
-=======
-# VibraMind
-VibraMind is a state-of-the-art predictive maintenance system designed for industrial motor bearings. It utilizes a hybrid Deep Learning architecture combining Multi-Scale CNNs (MSCAN), Temporal Convolutional Networks (TCN), and Transformers to predict Remaining Useful Life (RUL) with high precision and uncertainty quantification.
->>>>>>> e6978587f45cca3bff4a2889162394e6f86a8f2b
