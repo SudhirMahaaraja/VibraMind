@@ -842,7 +842,7 @@ for epoch in range(NUM_EPOCHS):
 
 total_training_time = time.time() - total_start_time
 
-model.load_state_dict(torch.load('best_mscan_model.pth', map_location=device))
+model.load_state_dict(torch.load(os.path.join('models', 'best_mscan_model.pth'), map_location=device))
 print(f"\n✓ Best model loaded from checkpoint to {device}")
 
 # ============================================================================
