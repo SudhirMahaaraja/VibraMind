@@ -149,7 +149,9 @@ class MSCAN_Hybrid(nn.Module):
         self.global_pool = nn.AdaptiveAvgPool1d(1)
         self.adapter1 = FeatureAdapter(ms_channels, bottleneck=8)
         
-        self.fc1 = nn.Linear(ms_channels, 128)
+        # FC layers
+        # Energy branch adds 2 features (horizontal & vertical mean absolute value)
+        self.fc1 = nn.Linear(ms_channels + input_channels, 128)
         self.fc2 = nn.Linear(128, 64)
         
         self.num_quantiles = num_quantiles
@@ -171,12 +173,17 @@ class MSCAN_Hybrid(nn.Module):
         self.sigmoid = nn.Sigmoid()
     
     def forward(self, x, return_domain=False):
-        x1 = self.relu(self.bn1(self.conv1x1(x)))
-        x2 = self.relu(self.bn2(self.conv3x3(x)))
-        x3 = self.relu(self.bn3(self.conv5x5(x)))
-        x4 = self.relu(self.bn4(self.conv7x7(x)))
+        # Parallel branches - NO BN here to preserve absolute vibration magnitude information
+        x1 = self.relu(self.conv1x1(x))
+        x2 = self.relu(self.conv3x3(x))
+        x3 = self.relu(self.conv5x5(x))
+        x4 = self.relu(self.conv7x7(x))
         
         x_multi = torch.cat([x1, x2, x3, x4], dim=1)
+        
+        # Calculate Energy feature (Mean Absolute Value) - Key for magnitude sensitivity
+        energy = torch.mean(torch.abs(x), dim=2) # (batch, 2)
+        
         x_ca = self.channel_attention(x_multi)
         x_sa = self.spatial_attention(x_ca)
         
@@ -191,7 +198,10 @@ class MSCAN_Hybrid(nn.Module):
         
         x_adapted = self.adapter1(x_trans)
         
-        x_fc = self.relu(self.fc1(x_adapted))
+        # Concatenate Energy feature to FC layers to distinguish silent vs loud bearings
+        x_combined = torch.cat([x_adapted, energy], dim=1)
+        
+        x_fc = self.relu(self.fc1(x_combined))
         x_fc = self.dropout(x_fc)
         x_fc = self.relu(self.fc2(x_fc))
         x_fc = self.dropout(x_fc)
@@ -453,13 +463,26 @@ def predict():
                 hi = 0.5
                 speed = voltage = 0.5
             
+            # Health Indicator Inversion & Safeguard
+            # In training, HI=1 means damage, so for UI we want 1 - hi
+            health_remaining = 1.0 - hi
+            
+            # Safeguard: If normalized signal energy (std) is extremely low,
+            # it indicates a healthy/new bearing with vibration below the training noise floor.
+            sig_intensity = np.std(sig_h) + np.std(sig_v)
+            if sig_intensity < 0.2: # Very low normalized vibration relative to dataset
+                health_remaining = max(health_remaining, 0.98)
+                rul_median = max(rul_median, 0.95)
+                rul_low = max(rul_low, 0.85)
+                rul_high = max(rul_high, 0.99)
+            
             return jsonify({
-                'rul': rul_median,
-                'rul_low': rul_low,
-                'rul_high': rul_high,
-                'hi': hi,
-                'speed': speed,
-                'voltage': voltage,
+                'rul': float(rul_median),
+                'rul_low': float(rul_low),
+                'rul_high': float(rul_high),
+                'hi': float(health_remaining),
+                'speed': float(speed),
+                'voltage': float(voltage),
                 'model_type': model_type
             })
             
