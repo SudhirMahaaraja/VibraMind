@@ -575,7 +575,7 @@ def get_image(image_name):
     if not filename:
         return "Image not found", 404
     
-    filepath = os.path.join(r"d:\prec machine", filename)
+    filepath = os.path.join(r"d:\prec machine\output", filename)
     if os.path.exists(filepath):
         return send_file(filepath, mimetype='image/png')
     else:
