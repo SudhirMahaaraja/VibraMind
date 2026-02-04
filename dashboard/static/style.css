@@ -1,0 +1,471 @@
+:root {
+    /* Core Palette - Warm Solar */
+    --bg-core: #FFFDF1;
+    /* Cream Background */
+    --bg-surface: #FFFFFF;
+    /* Pure White Surface */
+    --bg-surface-glass: rgba(255, 255, 255, 0.8);
+
+    /* Brand Colors */
+    --primary: #FF9644;
+    /* Vibrant Orange */
+    --primary-light: #FFCE99;
+    /* Pale Peach */
+    --primary-dark: #cc702a;
+    /* Darker Orange for hover */
+
+    --secondary: #562F00;
+    /* Dark Brown (Text/Accents) */
+
+    /* Functional Colors */
+    --accent-success: #2ED573;
+    --accent-warning: #FFA502;
+    --accent-danger: #FF4757;
+
+    /* Text */
+    --text-main: #562F00;
+    /* Deep Brown */
+    --text-muted: #8c6b4a;
+    /* Muted Brown */
+    --text-light: #FFFDF1;
+    /* Cream */
+
+    /* Gradients */
+    --grad-primary: linear-gradient(135deg, #FF9644 0%, #FFB373 100%);
+    --grad-glow: radial-gradient(circle at center, rgba(255, 150, 68, 0.15) 0%, transparent 70%);
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    background-color: var(--bg-core);
+    background-image:
+        radial-gradient(circle at 10% 20%, rgba(255, 206, 153, 0.15) 0%, transparent 40%),
+        radial-gradient(circle at 90% 80%, rgba(255, 150, 68, 0.08) 0%, transparent 40%);
+    color: var(--text-main);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+}
+
+/* --- Typography --- */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+    font-weight: 700;
+    color: var(--secondary);
+    letter-spacing: -0.02em;
+}
+
+.gradient-text {
+    background: linear-gradient(120deg, #562F00 0%, #FF9644 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+/* --- Navbar --- */
+.navbar {
+    background: rgba(255, 255, 255, 0.85);
+    /* Glassy White */
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(86, 47, 0, 0.05);
+    padding: 1rem 0;
+    box-shadow: 0 4px 20px rgba(86, 47, 0, 0.03);
+}
+
+.navbar-brand {
+    font-size: 1.25rem;
+    color: var(--secondary) !important;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+}
+
+.navbar-brand i {
+    color: var(--primary);
+    margin-right: 0.5rem;
+}
+
+#modelBadge {
+    background: var(--grad-primary);
+    color: var(--text-main);
+    /* Dark brown on orange */
+    box-shadow: 0 4px 10px rgba(255, 150, 68, 0.3);
+    border: none;
+    font-weight: 700;
+    padding: 0.5em 1em;
+}
+
+/* --- Feature Badges --- */
+.badge-feature {
+    background: #FFF8E7;
+    /* Ultra light orange tint */
+    border: 1px solid var(--primary-light);
+    color: var(--secondary);
+    padding: 0.6em 1.2em;
+    border-radius: 99px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    transition: all 0.2s ease;
+}
+
+.badge-feature:hover {
+    transform: translateY(-2px);
+    border-color: var(--primary);
+    background: var(--primary-light);
+    color: var(--secondary);
+}
+
+/* --- Cards --- */
+.kpi-card {
+    background: var(--bg-surface);
+    border: 1px solid rgba(86, 47, 0, 0.05);
+    border-radius: 20px;
+    padding: 2rem;
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    box-shadow: 0 10px 30px rgba(86, 47, 0, 0.03);
+    position: relative;
+    overflow: hidden;
+}
+
+.kpi-card::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: var(--primary-light);
+    transform: scaleX(0);
+    transition: transform 0.3s ease;
+    transform-origin: left;
+}
+
+.kpi-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 20px 40px rgba(86, 47, 0, 0.08);
+}
+
+.kpi-card:hover::after {
+    transform: scaleX(1);
+}
+
+/* Icons within cards */
+.icon-box {
+    width: 64px;
+    height: 64px;
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.75rem;
+    margin-bottom: 1rem;
+    transition: transform 0.3s ease;
+
+    /* Light Mode Backgrounds */
+    background: #FFF8F0;
+    border: 1px solid var(--primary-light);
+}
+
+.icon-rul {
+    color: var(--primary);
+}
+
+.icon-hi {
+    color: var(--accent-success);
+}
+
+.icon-speed {
+    color: var(--accent-warning);
+}
+
+.icon-voltage {
+    color: var(--accent-danger);
+}
+
+/* --- Main Interface Card --- */
+.main-card {
+    background: var(--bg-surface);
+    border-radius: 24px;
+    border: 1px solid rgba(86, 47, 0, 0.05);
+    box-shadow: 0 20px 60px rgba(86, 47, 0, 0.05);
+    overflow: hidden;
+}
+
+/* Tabs */
+.card-header {
+    background: #FFFDF5 !important;
+    border-bottom: 1px solid rgba(86, 47, 0, 0.05);
+}
+
+.nav-tabs .nav-link {
+    color: var(--text-muted);
+    font-weight: 600;
+    border: none;
+    padding: 1.25rem 2rem;
+    transition: all 0.3s ease;
+    background: transparent;
+}
+
+.nav-tabs .nav-link:hover {
+    color: var(--primary);
+    background: rgba(255, 150, 68, 0.05);
+}
+
+.nav-tabs .nav-link.active {
+    color: var(--secondary);
+    background: white;
+    box-shadow: 0 -4px 0 var(--primary) inset;
+}
+
+/* Upload Area */
+.upload-area {
+    border: 2px dashed var(--primary-light);
+    background: #FFFDF9;
+    border-radius: 20px;
+    transition: all 0.3s ease;
+}
+
+.upload-area:hover,
+.upload-area.dragover {
+    border-color: var(--primary);
+    background: #FFF8F0;
+    transform: translateY(-2px);
+}
+
+.text-primary-custom {
+    color: var(--primary) !important;
+}
+
+/* Buttons */
+.btn-primary-custom {
+    background: var(--primary);
+    border: none;
+    border-radius: 12px;
+    padding: 12px 30px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    color: white;
+    /* White text on Orange is standard, can switch to Brown if user wants super high contrast */
+    box-shadow: 0 8px 15px rgba(255, 150, 68, 0.3);
+    transition: all 0.3s ease;
+}
+
+.btn-primary-custom:hover {
+    background: var(--primary-dark);
+    transform: translateY(-2px);
+    box-shadow: 0 12px 25px rgba(255, 150, 68, 0.4);
+    color: white;
+}
+
+/* --- Results Section --- */
+.result-card {
+    background: linear-gradient(180deg, #FFFFFF 0%, #FFFDF9 100%);
+    border: 1px solid var(--primary-light);
+    border-radius: 16px;
+    padding: 1.5rem;
+    box-shadow: 0 5px 20px rgba(86, 47, 0, 0.02);
+}
+
+.result-metric {
+    background: #FFFFFF;
+    border: 1px solid #F0F0F0;
+    border-radius: 12px;
+    padding: 1.5rem;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.02);
+    transition: transform 0.2s, border-color 0.2s;
+}
+
+.result-metric:hover {
+    border-color: var(--primary);
+    transform: scale(1.03);
+}
+
+.text-hi {
+    color: var(--accent-success);
+    font-weight: 700;
+}
+
+.text-speed {
+    color: var(--accent-warning);
+    font-weight: 700;
+}
+
+.text-voltage {
+    color: var(--accent-danger);
+    font-weight: 700;
+}
+
+/* Progress Bars */
+.progress-wrapper {
+    background: #F0F0F0;
+    border-radius: 10px;
+    padding: 4px;
+}
+
+.progress {
+    background: #E5E5E5;
+    border-radius: 8px;
+    overflow: visible;
+}
+
+.progress-bar {
+    border-radius: 6px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.progress-bar.bg-success {
+    background: var(--accent-success) !important;
+}
+
+.progress-bar.bg-warning {
+    background: var(--accent-warning) !important;
+}
+
+.progress-bar.bg-danger {
+    background: var(--accent-danger) !important;
+}
+
+/* Insight Alerts */
+.alert-gradient {
+    background: #FFF8E7;
+    /* Light orange-cream */
+    border-left: 4px solid var(--accent-warning);
+    border-radius: 8px;
+    color: var(--secondary);
+    padding: 1rem;
+}
+
+/* Architecture Cards */
+.architecture-card {
+    background: var(--bg-surface);
+    border: 1px solid rgba(86, 47, 0, 0.05);
+    border-radius: 20px;
+    box-shadow: 0 5px 20px rgba(86, 47, 0, 0.02);
+}
+
+.arch-block {
+    background: #F9F9F9;
+    border: 1px dashed #DDD;
+    border-radius: 12px;
+    padding: 1.25rem;
+    text-align: center;
+    transition: all 0.3s;
+}
+
+.arch-block:hover {
+    background: #FFF8F0;
+    border-color: var(--primary);
+    border-style: solid;
+    transform: translateY(-3px);
+}
+
+.arch-block i {
+    font-size: 1.5rem;
+    margin-bottom: 0.75rem;
+    color: var(--primary);
+}
+
+.arch-block span {
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+/* Inputs */
+.form-control {
+    background: #FFFFFF;
+    border: 1px solid #E0E0E0;
+    color: var(--bg-secondary);
+    border-radius: 12px;
+    padding: 0.8rem 1rem;
+    font-size: 0.95rem;
+    transition: all 0.2s;
+}
+
+.form-control:focus {
+    background: #FFFFFF;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(255, 150, 68, 0.2);
+    color: var(--secondary);
+}
+
+.form-label {
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--text-muted);
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+}
+
+/* Footer */
+footer {
+    border-top: 1px solid rgba(86, 47, 0, 0.05);
+    background: var(--bg-surface);
+    font-size: 0.9rem;
+    color: var(--text-muted) !important;
+}
+
+footer p {
+    color: var(--text-muted) !important;
+    opacity: 1 !important;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+    width: 8px;
+    background: var(--bg-core);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--primary-light);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--primary);
+}
+
+/* Animations */
+@keyframes pulse {
+    0% {
+        box-shadow: 0 0 0 0 rgba(255, 150, 68, 0.4);
+    }
+
+    70% {
+        box-shadow: 0 0 0 10px rgba(255, 150, 68, 0);
+    }
+
+    100% {
+        box-shadow: 0 0 0 0 rgba(255, 150, 68, 0);
+    }
+}
+
+.btn-primary-custom.pulse {
+    animation: pulse 2s infinite;
+}
+
+/* Utilities */
+.bg-gradient-primary {
+    background: var(--grad-primary) !important;
+    color: var(--secondary) !important;
+    /* Brown text on gradient badges */
+    border: none;
+}
+
+/* Images */
+.placeholder-img {
+    background: #F9F9F9;
+    border-radius: 12px;
+    border: 1px solid #EEE;
+    padding: 10px;
+}

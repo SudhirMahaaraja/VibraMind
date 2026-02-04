@@ -1,0 +1,15 @@
+# Core ML
+torch
+numpy
+pandas
+scikit-learn
+scipy
+matplotlib
+seaborn
+
+# Web Dashboard
+flask
+joblib
+
+# Utilities (already included with above)
+# requests, pillow are optional

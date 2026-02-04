@@ -1,0 +1,27 @@
+# Environments
+.venv/
+venv/
+ENV/
+env/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.ipynb_checkpoints
+
+# Data (Too large for GitHub)
+measures_v2.csv
+datasets/
+
+# Output & Results
+output/
+*.png
+*_summary.txt
+rul_results_summary.txt
+
+# Editor/OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
