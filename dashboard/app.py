@@ -16,25 +16,8 @@ app = Flask(__name__)
 # MODEL DEFINITION (Must match saved model - Hybrid MSCAN + Transformer)
 # ============================================================================
 
-class GradientReversalFunction(Function):
-    @staticmethod
-    def forward(ctx, x, alpha):
-        ctx.alpha = alpha
-        return x.view_as(x)
-    
-    @staticmethod
-    def backward(ctx, grad_output):
-        return grad_output.neg() * ctx.alpha, None
-
-class GradientReversalLayer(nn.Module):
-    def __init__(self, alpha=1.0):
-        super().__init__()
-        self.alpha = alpha
-    
-    def forward(self, x):
-        return GradientReversalFunction.apply(x, self.alpha)
-
 class ChannelAttention(nn.Module):
+
     def __init__(self, channels, reduction=4):
         super().__init__()
         self.avg_pool = nn.AdaptiveAvgPool1d(1)
@@ -121,7 +104,7 @@ class FeatureAdapter(nn.Module):
         return x + self.up(self.relu(self.down(x)))
 
 class MSCAN_Hybrid(nn.Module):
-    def __init__(self, input_channels=2, num_filters=16, dropout_rate=0.3, num_quantiles=3):
+    def __init__(self, input_channels=3, num_filters=16, dropout_rate=0.3, num_quantiles=3):
         super().__init__()
         
         self.conv1x1 = nn.Conv1d(input_channels, num_filters, kernel_size=1)
@@ -138,6 +121,7 @@ class MSCAN_Hybrid(nn.Module):
         
         self.channel_attention = ChannelAttention(ms_channels, reduction=4)
         self.spatial_attention = SpatialAttention(kernel_size=3)
+
         
         self.tcn1 = TemporalConvBlock(ms_channels, ms_channels, dilation=1)
         self.tcn2 = TemporalConvBlock(ms_channels, ms_channels, dilation=2)
@@ -160,19 +144,12 @@ class MSCAN_Hybrid(nn.Module):
         self.speed_head = nn.Linear(64, 1)
         self.voltage_head = nn.Linear(64, 1)
         
-        self.grl = GradientReversalLayer(alpha=1.0)
-        self.domain_classifier = nn.Sequential(
-            nn.Linear(ms_channels, 32),
-            nn.ReLU(),
-            nn.Dropout(0.3),
-            nn.Linear(32, 3)
-        )
-        
         self.relu = nn.ReLU()
         self.dropout = nn.Dropout(dropout_rate)
         self.sigmoid = nn.Sigmoid()
+
     
-    def forward(self, x, return_domain=False):
+    def forward(self, x):
         # Parallel branches - NO BN here to preserve absolute vibration magnitude information
         x1 = self.relu(self.conv1x1(x))
         x2 = self.relu(self.conv3x3(x))
@@ -213,12 +190,8 @@ class MSCAN_Hybrid(nn.Module):
         
         out = torch.cat([rul_quantiles, hi_pred, speed_pred, voltage_pred], dim=1)
         
-        if return_domain:
-            x_global = self.global_pool(x_tcn).view(x_tcn.size(0), -1)
-            domain_out = self.domain_classifier(self.grl(x_global))
-            return out, domain_out
-        
         return out
+
 
 # Legacy model for backward compatibility
 class MSCAN_RUL_Legacy(nn.Module):
@@ -260,7 +233,8 @@ class MSCAN_RUL_Legacy(nn.Module):
 # ============================================================================
 MODEL_PATH = r"d:\prec machine\models\best_mscan_model.pth"
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-WINDOW_SIZE = 5120
+WINDOW_SIZE = 2560
+
 
 print(f"Loading model on {DEVICE}...")
 model = None
@@ -268,51 +242,42 @@ model_type = "hybrid"  # 'hybrid', 'legacy', 'untrained'
 
 try:
     # Try Hybrid model first
-    model = MSCAN_Hybrid(input_channels=2).to(DEVICE)
+    model = MSCAN_Hybrid(input_channels=3).to(DEVICE)
     model.load_state_dict(torch.load(MODEL_PATH, map_location=DEVICE))
     model_type = "hybrid"
-    print("✓ Loaded HYBRID model (MSCAN + Transformer + Quantile RUL).")
+    print("✓ Loaded HYBRID model (3-Channel: VibH, VibV, Temp).")
 except Exception as e:
     print(f"! Hybrid model load failed: {e}")
     try:
         # Fallback to legacy model
-        model = MSCAN_RUL_Legacy(input_channels=2).to(DEVICE)
+        model = MSCAN_RUL_Legacy(input_channels=3).to(DEVICE)
         model.load_state_dict(torch.load(MODEL_PATH, map_location=DEVICE))
         model_type = "legacy"
-        print("✓ Loaded LEGACY model (Original MSCAN).")
+        print("✓ Loaded LEGACY model.")
     except Exception as e2:
         print(f"! Legacy model load failed: {e2}")
         print("WARNING: Using UNTRAINED Hybrid Model for demonstration.")
-        model = MSCAN_Hybrid(input_channels=2).to(DEVICE)
+        model = MSCAN_Hybrid(input_channels=3).to(DEVICE)
         model_type = "untrained"
+
 
 model.eval()
 
-# Load Tabular Model
-TABULAR_MODEL_PATH = r"d:\prec machine\models\tabular_model.pkl"
-tabular_model = None
-try:
-    if os.path.exists(TABULAR_MODEL_PATH):
-        tabular_model = joblib.load(TABULAR_MODEL_PATH)
-        print("✓ Loaded Tabular Model for Manual Diagnostics.")
-except Exception as e:
-    print(f"Error loading tabular model: {e}")
+
 
 # Load Scalers (for consistent preprocessing)
 INPUT_SCALER_PATH = r"d:\prec machine\models\input_scaler.pkl"
-QUANTILE_TRANSFORMER_PATH = r"d:\prec machine\models\quantile_transformer.pkl"
 input_scaler = None
-quantile_transformer = None
 
 try:
-    if os.path.exists(INPUT_SCALER_PATH) and os.path.exists(QUANTILE_TRANSFORMER_PATH):
+    if os.path.exists(INPUT_SCALER_PATH):
         input_scaler = joblib.load(INPUT_SCALER_PATH)
-        quantile_transformer = joblib.load(QUANTILE_TRANSFORMER_PATH)
-        print("✓ Loaded Input Scalers (RobustScaler + QuantileTransformer).")
+        print("✓ Loaded Input Scaler (RobustScaler).")
     else:
-        print("! Scalers not found - will use simple z-score normalization.")
+        print("! Scaler not found - will use simple z-score normalization.")
 except Exception as e:
-    print(f"Error loading scalers: {e}")
+    print(f"Error loading scaler: {e}")
+
 
 # ============================================================================
 # ROUTES
@@ -363,11 +328,15 @@ def predict():
             signal_h += np.random.normal(0, 0.1, WINDOW_SIZE)
             signal_v += np.random.normal(0, 0.1, WINDOW_SIZE)
             
-            # Normalize (similar to training preprocessing)
-            signal_h = (signal_h - np.mean(signal_h)) / (np.std(signal_h) + 1e-8)
-            signal_v = (signal_v - np.mean(signal_v)) / (np.std(signal_v) + 1e-8)
+            # Add realistic temperature (3rd channel)
+            temp_base = 40.0
+            if health_state == 'degraded': temp_base = 65.0
+            elif health_state == 'critical': temp_base = 85.0
             
-            signal = np.stack([signal_h, signal_v], axis=0).astype(np.float32)
+            temp_signal = np.full(WINDOW_SIZE, temp_base + np.random.normal(0, 1), dtype=np.float32)
+            
+            signal = np.stack([signal_h, signal_v, temp_signal], axis=0).astype(np.float32)
+
             
             with torch.no_grad():
                 tensor_x = torch.FloatTensor(signal).unsqueeze(0).to(DEVICE)
@@ -399,8 +368,14 @@ def predict():
                 'voltage': voltage,
                 'model_type': model_type,
                 'demo_state': health_state,
-                'message': f'Demo prediction ({health_state} bearing simulation)'
+                'message': f'Demo prediction ({health_state} bearing simulation)',
+                'signals': {
+                    'h': signal_h.tolist(),
+                    'v': signal_v.tolist(),
+                    't': temp_signal.tolist()
+                }
             })
+
 
         if 'file' not in request.files:
             return jsonify({'error': 'No file uploaded'}), 400
@@ -414,33 +389,38 @@ def predict():
             cols = df.columns.tolist()
             h_col = next((c for c in cols if 'horiz' in c.lower()), cols[0])
             v_col = next((c for c in cols if 'vert' in c.lower()), cols[1] if len(cols)>1 else cols[0])
+            t_col = next((c for c in cols if 'temp' in c.lower() or 'winding' in c.lower()), None)
             
             sig_h = df[h_col].values.astype(np.float32)
             sig_v = df[v_col].values.astype(np.float32)
+            
+            if t_col:
+                sig_t = df[t_col].values.astype(np.float32)
+            else:
+                # Default temperature if not provided
+                sig_t = np.full_like(sig_h, 50.0)
             
             current_len = len(sig_h)
             if current_len < WINDOW_SIZE:
                 pad_len = WINDOW_SIZE - current_len
                 sig_h = np.pad(sig_h, (0, pad_len), mode='edge')
                 sig_v = np.pad(sig_v, (0, pad_len), mode='edge')
+                sig_t = np.pad(sig_t, (0, pad_len), mode='edge')
             elif current_len > WINDOW_SIZE:
                 sig_h = sig_h[-WINDOW_SIZE:]
                 sig_v = sig_v[-WINDOW_SIZE:]
+                sig_t = sig_t[-WINDOW_SIZE:]
             
-            # Apply trained scalers (same as training preprocessing)
-            if input_scaler is not None and quantile_transformer is not None:
-                # Stack and reshape for scaler (samples, features)
-                raw_signal = np.stack([sig_h, sig_v], axis=1)  # (WINDOW_SIZE, 2)
+            # Apply trained scalers
+            if input_scaler is not None:
+                raw_signal = np.stack([sig_h, sig_v, sig_t], axis=1)
                 scaled = input_scaler.transform(raw_signal)
-                normalized = quantile_transformer.transform(scaled)
-                sig_h = normalized[:, 0]
-                sig_v = normalized[:, 1]
-            else:
-                # Fallback: simple z-score
-                sig_h = (sig_h - np.mean(sig_h)) / (np.std(sig_h) + 1e-8)
-                sig_v = (sig_v - np.mean(sig_v)) / (np.std(sig_v) + 1e-8)
+                sig_h = scaled[:, 0]
+                sig_v = scaled[:, 1]
+                sig_t = scaled[:, 2]
             
-            signal = np.stack([sig_h, sig_v], axis=0).astype(np.float32)
+            signal = np.stack([sig_h, sig_v, sig_t], axis=0).astype(np.float32)
+
             
             with torch.no_grad():
                 tensor_x = torch.FloatTensor(signal).unsqueeze(0).to(DEVICE)
@@ -483,8 +463,14 @@ def predict():
                 'hi': float(health_remaining),
                 'speed': float(speed),
                 'voltage': float(voltage),
-                'model_type': model_type
+                'model_type': model_type,
+                'signals': {
+                    'h': sig_h.tolist(),
+                    'v': sig_v.tolist(),
+                    't': sig_t.tolist()
+                }
             })
+
             
         except Exception as e:
             return jsonify({'error': f"Processing error: {str(e)}"}), 500
@@ -492,62 +478,7 @@ def predict():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@app.route('/predict_manual', methods=['POST'])
-def predict_manual():
-    try:
-        data = request.json
-        
-        temp_coolant = float(data.get('coolant', 50))
-        temp_stator = float(data.get('stator_winding', 60))
-        torque = float(data.get('torque', 20))
-        u_q = float(data.get('u_q', 100))
-        i_d = float(data.get('i_d', -80))
-        
-        rul_pred = 0.5
-        rul_low = 0.4
-        rul_high = 0.6
-        model_used = "Heuristic"
-        
-        if tabular_model:
-            input_vector = np.array([[temp_coolant, temp_stator, torque, u_q, i_d]])
-            rul_pred = float(tabular_model.predict(input_vector)[0])
-            model_used = "Random Forest Model"
-            rul_pred = max(0.01, min(1.0, rul_pred))
-            rul_low = max(0.01, rul_pred - 0.1)
-            rul_high = min(1.0, rul_pred + 0.1)
-        else:
-            rul_pred = 1.0
-            avg_temp = (temp_coolant + temp_stator) / 2
-            if avg_temp > 90: rul_pred -= 0.4
-            elif avg_temp > 70: rul_pred -= 0.15
-            if abs(torque) > 55: rul_pred -= 0.3
-            elif abs(torque) > 40: rul_pred -= 0.1
-            if abs(i_d) > 150: rul_pred -= 0.2
-            rul_pred = max(0.05, min(1.0, rul_pred))
-            rul_low = max(0.01, rul_pred - 0.15)
-            rul_high = min(1.0, rul_pred + 0.15)
 
-        impacts = {'thermal': 'Normal', 'load': 'Normal', 'elec': 'Normal'}
-        
-        avg_temp = (temp_coolant + temp_stator) / 2
-        if avg_temp > 90: impacts['thermal'] = 'CRITICAL'
-        elif avg_temp > 75: impacts['thermal'] = 'High'
-        
-        if abs(torque) > 50: impacts['load'] = 'CRITICAL'
-        elif abs(torque) > 35: impacts['load'] = 'High'
-        
-        if abs(i_d) > 120: impacts['elec'] = 'Abnormal'
-
-        return jsonify({
-            'rul': rul_pred,
-            'rul_low': rul_low,
-            'rul_high': rul_high,
-            'impact': impacts,
-            'method': model_used
-        })
-        
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
 
 @app.route('/model_info')
 def model_info():
@@ -558,10 +489,10 @@ def model_info():
             'Multi-Scale CNN (1x1, 3x3, 5x5, 7x7)',
             'Temporal Convolutional Network',
             'Lightweight Transformer',
-            'Domain Adaptation (DANN)',
             'Quantile Regression (Uncertainty)',
             'Multi-Task Learning'
         ] if model_type == "hybrid" else ['Legacy MSCAN']
+
     })
 
 @app.route('/results/<image_name>')
@@ -580,6 +511,14 @@ def get_image(image_name):
         return send_file(filepath, mimetype='image/png')
     else:
         return "Graph not generated yet", 404
+
+@app.route('/interactive_report')
+def interactive_report():
+    filepath = os.path.join(r"d:\prec machine\output", "interactive_results.html")
+    if os.path.exists(filepath):
+        return send_file(filepath)
+    return "Interactive report not generated yet. Run main.py first.", 404
+
 
 if __name__ == '__main__':
     print("Starting Dashboard Server...")

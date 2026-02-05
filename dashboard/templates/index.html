@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Motor RUL Prediction Dashboard | PREC MACHINE AI</title>
     <link rel="icon"
-        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%23FFFDF1'><path d='M0 0h1v15h15v1H0V0zm10 3.5a.5.5 0 0 1 .5-.5h4a.5.5 0 0 1 .5.5v4a.5.5 0 0 1-1 0V4.9l-3.613 4.417a.5.5 0 0 1-.74.037L7.06 6.767l-3.656 5.027a.5.5 0 0 1-.808-.588l4-5.5a.5.5 0 0 1 .758-.06l2.609 2.61L13.445 4H10.5a.5.5 0 0 1-.5-.5z'/></svg>">
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%23FFFDF1'><path d='M4 11H2v3h2v-3zm5-4H7v7h2V7zm5-5v12h-2V2h2zm-2-1a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1h-2zM6 7a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V7zm-5 4a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1v-3z'/></svg>">
     <meta name="description"
         content="Advanced motor health prediction with uncertainty quantification using hybrid MSCAN + Transformer architecture">
     <!-- Bootstrap 5 CSS -->
@@ -17,6 +17,9 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <!-- Custom CSS -->
     <link rel="stylesheet" href="/static/style.css">
+    <!-- Plotly.js -->
+    <script src="https://cdn.plot.ly/plotly-2.24.1.min.js"></script>
+
 </head>
 
 <body>
@@ -48,11 +51,7 @@
                                     data-bs-target="#vibration-pane" type="button" role="tab"><i
                                         class="fas fa-wave-square me-2"></i>Vibration Analysis</button>
                             </li>
-                            <li class="nav-item" role="presentation">
-                                <button class="nav-link fw-bold" id="manual-tab" data-bs-toggle="tab"
-                                    data-bs-target="#manual-pane" type="button" role="tab"><i
-                                        class="fas fa-sliders-h me-2"></i>Manual Diagnostic</button>
-                            </li>
+
                         </ul>
                     </div>
                     <div class="card-body p-4">
@@ -64,8 +63,9 @@
                                     <div class="col-md-5 border-end pe-4">
                                         <label class="form-label fw-bold">Upload Vibration CSV</label>
                                         <p class="small text-muted mb-3">
-                                            Upload a CSV file with Horizontal & Vertical vibration signals.
-                                            Model uses 5120-sample windows with advanced preprocessing.
+                                            Upload a CSV file with Horizontal, Vertical vibration signals and
+                                            Temperature.
+                                            Model uses 2560-sample windows with advanced multi-modal preprocessing.
                                         </p>
 
                                         <form id="uploadForm">
@@ -173,7 +173,15 @@
                                                 <i class="fas fa-microchip me-1"></i>
                                                 Model: <span id="modelTypeInfo">--</span>
                                             </div>
+
+                                            <div class="mt-4">
+                                                <h6 class="fw-bold"><i class="fas fa-chart-area me-2"></i>Live Signal
+                                                    Visualization</h6>
+                                                <div id="signalChart" style="height: 300px;"
+                                                    class="border rounded bg-white"></div>
+                                            </div>
                                         </div>
+
 
                                         <div id="emptyState" class="text-center py-5 opacity-50">
                                             <i class="fas fa-chart-line fa-3x mb-3"></i>
@@ -183,98 +191,20 @@
                                 </div>
                             </div>
 
-                            <!-- Tab 2: Manual Entry -->
-                            <div class="tab-pane fade" id="manual-pane" role="tabpanel">
-                                <div class="row g-5">
-                                    <div class="col-md-5 border-end pe-4">
-                                        <h5 class="fw-bold mb-3">Operational Parameters</h5>
-                                        <p class="text-muted small mb-4">Enter current operating readings.</p>
 
-                                        <form id="manualForm">
-                                            <div class="mb-3">
-                                                <label class="form-label">Coolant Temperature (°C)</label>
-                                                <input type="number" class="form-control" name="coolant" step="0.1"
-                                                    value="50.0" required>
-                                            </div>
-                                            <div class="mb-3">
-                                                <label class="form-label">Stator Temp / Winding (°C)</label>
-                                                <input type="number" class="form-control" name="stator_winding"
-                                                    step="0.1" value="65.0" required>
-                                            </div>
-                                            <div class="mb-3">
-                                                <label class="form-label">Motor Torque (Nm)</label>
-                                                <input type="number" class="form-control" name="torque" step="0.1"
-                                                    value="20.0" required>
-                                            </div>
-                                            <div class="mb-3">
-                                                <label class="form-label">Voltage q-component (V)</label>
-                                                <input type="number" class="form-control" name="u_q" step="0.1"
-                                                    value="100.0" required>
-                                            </div>
-                                            <div class="mb-3">
-                                                <label class="form-label">Current d-component (A)</label>
-                                                <input type="number" class="form-control" name="i_d" step="0.1"
-                                                    value="-80.0" required>
-                                            </div>
-
-                                            <div class="d-grid mt-4">
-                                                <button type="submit" class="btn btn-primary-custom text-white">
-                                                    <i class="fas fa-calculator me-2"></i>Estimate RUL
-                                                </button>
-                                            </div>
-                                        </form>
-                                    </div>
-
-                                    <div class="col-md-7 ps-md-4 d-flex flex-column justify-content-center">
-                                        <div id="manualResultContainer" class="d-none">
-                                            <div class="text-center mb-4">
-                                                <h6 class="text-muted text-uppercase ls-1">Estimated Health Score</h6>
-                                                <h1 class="display-2 fw-bold gradient-text" id="manualRulValue">--%</h1>
-                                                <div class="d-flex justify-content-center gap-3 mt-2">
-                                                    <small class="text-muted">
-                                                        <i class="fas fa-arrow-down text-danger"></i>
-                                                        <span id="manualRulLow">--</span>
-                                                    </small>
-                                                    <small class="text-muted">
-                                                        <i class="fas fa-arrow-up text-success"></i>
-                                                        <span id="manualRulHigh">--</span>
-                                                    </small>
-                                                </div>
-                                            </div>
-
-                                            <div class="card result-card border-0 p-3 mb-3">
-                                                <h6 class="fw-bold mb-2">Parameter Impact Analysis</h6>
-                                                <ul class="list-unstyled small mb-0">
-                                                    <li class="d-flex justify-content-between py-1 border-bottom">
-                                                        <span>Thermal Stress (Temps):</span>
-                                                        <span class="fw-bold" id="impactThermal">--</span>
-                                                    </li>
-                                                    <li class="d-flex justify-content-between py-1 border-bottom">
-                                                        <span>Mechanical Load (Torque):</span>
-                                                        <span class="fw-bold" id="impactLoad">--</span>
-                                                    </li>
-                                                    <li class="d-flex justify-content-between py-1">
-                                                        <span>Electrical Stress (V/I):</span>
-                                                        <span class="fw-bold" id="impactElec">--</span>
-                                                    </li>
-                                                </ul>
-                                            </div>
-
-                                        </div>
-                                        <div id="manualEmptyState" class="text-center opacity-50">
-                                            <i class="fas fa-sliders-h fa-3x mb-3"></i>
-                                            <p>Enter parameters to estimate RUL</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
         <!-- Training Visuals Section -->
-        <h3 class="fw-bold mb-4 border-bottom pb-2 border-dark">Training Performance & Feature Analysis</h3>
+        <div class="d-flex justify-content-between align-items-center mb-4 border-bottom pb-2 border-dark">
+            <h3 class="fw-bold mb-0">Training Performance & Feature Analysis</h3>
+            <a href="/interactive_report" target="_blank" class="btn btn-outline-primary btn-sm">
+                <i class="fas fa-external-link-alt me-1"></i>View Full Interactive Report
+            </a>
+        </div>
+
         <div class="row g-4">
             <div class="col-md-6">
                 <div class="card h-100 shadow-sm border-0">

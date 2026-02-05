@@ -200,7 +200,7 @@ document.addEventListener('DOMContentLoaded', function () {
         // Color coding
         rulBar.classList.remove('bg-success', 'bg-warning', 'bg-danger');
         rulBarLow.classList.remove('bg-success', 'bg-warning', 'bg-danger');
-        
+
         if (rulMedian > 0.7) {
             rulBar.classList.add('bg-success');
             rulBarLow.classList.add('bg-success');
@@ -220,7 +220,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         // Health Indicator
         document.getElementById('hiValue').textContent = (hi * 100).toFixed(1) + '%';
-        
+
         // Speed & Voltage
         document.getElementById('speedValue').textContent = data.speed.toFixed(3);
         document.getElementById('voltageValue').textContent = data.voltage.toFixed(3);
@@ -228,20 +228,64 @@ document.addEventListener('DOMContentLoaded', function () {
         // Model type
         const modelTypeInfo = document.getElementById('modelTypeInfo');
         if (modelTypeInfo) {
-            const modelName = data.model_type === 'hybrid' 
-                ? 'Hybrid MSCAN + Transformer (Quantile)' 
-                : data.model_type === 'legacy' 
-                    ? 'Legacy MSCAN' 
+            const modelName = data.model_type === 'hybrid'
+                ? 'Hybrid MSCAN + Transformer (Quantile)'
+                : data.model_type === 'legacy'
+                    ? 'Legacy MSCAN'
                     : 'Demonstration Mode';
             modelTypeInfo.textContent = modelName;
         }
+
+        // Render Signal Chart
+        if (data.signals) {
+            const traceH = {
+                y: data.signals.h,
+                mode: 'lines',
+                name: 'Horiz Vibration',
+                line: { color: '#FF9644', width: 1 }
+            };
+            const traceV = {
+                y: data.signals.v,
+                mode: 'lines',
+                name: 'Vert Vibration',
+                line: { color: '#562F00', width: 1, opacity: 0.5 }
+            };
+            const traceT = {
+                y: data.signals.t,
+                mode: 'lines',
+                name: 'Temperature',
+                yaxis: 'y2',
+                line: { color: '#FF4757', width: 2 }
+            };
+
+            const layout = {
+                margin: { l: 40, r: 40, b: 30, t: 10 },
+                showlegend: true,
+                legend: { orientation: 'h', y: -0.2 },
+                xaxis: { title: 'Samples', showgrid: false },
+                yaxis: { title: 'Vibration (norm)', showgrid: true },
+                yaxis2: {
+                    title: 'Temp (°C)',
+                    overlaying: 'y',
+                    side: 'right',
+                    range: [0, 120]
+                },
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                plot_bgcolor: 'rgba(0,0,0,0)',
+                hovermode: 'x unified'
+            };
+
+            const config = { responsive: true, displayModeBar: false };
+            Plotly.newPlot('signalChart', [traceH, traceV, traceT], layout, config);
+        }
     }
+
 
     async function fetchModelInfo() {
         try {
             const response = await fetch('/model_info');
             const info = await response.json();
-            
+
             const badge = document.getElementById('modelBadge');
             if (badge) {
                 if (info.model_type === 'hybrid') {

@@ -48,42 +48,60 @@ def get_sorted_csv_files(bearing_path):
         files.sort()
     return files
 
-def process_motor_bearing(bearing_path, feature_cols):
-    print(f"Processing bearing: {bearing_path}")
-    files = get_sorted_csv_files(bearing_path)
-    files = files[::5]
+def load_femto_bearing(bearing_path):
+    print(f"Loading FEMTO bearing: {bearing_path}")
+    if not os.path.exists(bearing_path):
+        return None
+        
+    all_files = os.listdir(bearing_path)
+    acc_files = sorted([f for f in all_files if f.startswith('acc_') and f.endswith('.csv')])
+    temp_files = sorted([f for f in all_files if f.startswith('temp_') and f.endswith('.csv')])
     
-    if not files:
-        print("  No CSV files found.")
-        return None, None
+    if not acc_files:
+        return None
         
     bearing_data = []
-    req_cols = ['Horizontal_vibration_signals', 'Vertical_vibration_signals', 'motor_speed', 'u_q', 'u_d']
     
-    for csv_file in files:
-        file_path = os.path.join(bearing_path, csv_file)
+    for acc_file in acc_files:
+        acc_num = acc_file.split('_')[1].split('.')[0]
+        acc_path = os.path.join(bearing_path, acc_file)
+        
         try:
-            df = load_and_parse_csv(file_path)
-            if df.empty: continue
-            if all(col in df.columns for col in req_cols):
-                data_chunk = df[req_cols].values
-                bearing_data.append(data_chunk)
+            acc_df = pd.read_csv(acc_path, header=None)
+            if isinstance(acc_df.iloc[0, 0], str):
+                acc_df = pd.read_csv(acc_path)
+            
+            vib_data = acc_df.iloc[:, -2:].values.astype(np.float32)
+            
+            # Find matching temp
+            temp_file = f"temp_{acc_num}.csv"
+            temp_val = 0.0
+            if temp_file in temp_files:
+                temp_path = os.path.join(bearing_path, temp_file)
+                temp_df = pd.read_csv(temp_path, header=None)
+                if isinstance(temp_df.iloc[0, 0], str):
+                    temp_df = pd.read_csv(temp_path)
+                temp_val = temp_df.iloc[:, -1].mean()
+            
+            temp_channel = np.full((vib_data.shape[0], 1), temp_val, dtype=np.float32)
+            combined = np.concatenate([vib_data, temp_channel], axis=1)
+            bearing_data.append(combined)
         except Exception as e:
-            print(f"  Error loading {csv_file}: {e}")
             continue
             
-    if not bearing_data:
-        return None, None
-        
-    full_data = np.concatenate(bearing_data, axis=0)
-    return full_data, None
+    return bearing_data
 
 # Dataset Config
 DATASET_ROOT = "datasets"
-CONDITIONS = ["Condition 1", "Condition 2", "Condition 3"]
-WINDOW_SIZE = 5120
+FEMTO_TRAIN_DIR = os.path.join(DATASET_ROOT, "Learning_set")
+FEMTO_TEST_DIR = os.path.join(DATASET_ROOT, "Test_set")
+FEMTO_VAL_DIR = os.path.join(DATASET_ROOT, "Full_Test_Set")
+
+WINDOW_SIZE = 2560 # Standard FEMTO window
+
 STEP_SIZE = 2560
-PREDICTION_HORIZON = 50
+PREDICTION_HORIZON = 0 # Directly label each file
+
 
 # ============================================================================
 # PART 2: ENHANCED FEATURE EXTRACTION & HEALTH INDICATOR
@@ -274,144 +292,158 @@ def balance_dataset(X, y, threshold=0.25, factor=3):
 # PART 4: DATA PROCESSING
 # ============================================================================
 
-all_windows_train = []
-all_labels_train = []
-all_windows_test = []
-all_labels_test = []
-domain_labels_train = []
-domain_labels_test = []
+# --- Data Collection ---
+all_windows_train, all_labels_train, domain_labels_train = [], [], []
+all_windows_test, all_labels_test, domain_labels_test = [], [], []
+all_windows_val, all_labels_val, domain_labels_val = [], [], []
 
-print(f"\nStage 1: Fitting Scalers...")
-input_scaler = RobustScaler()
-quantile_transformer = QuantileTransformer(output_distribution='normal', random_state=42)
-speed_scaler = MinMaxScaler()
-voltage_scaler = MinMaxScaler()
-
-train_inputs = []
-train_speeds = []
-train_volts = []
-
-for condition in ["Condition 1", "Condition 2"]:
-    cond_path = os.path.join(DATASET_ROOT, condition)
-    if not os.path.exists(cond_path): continue
-    bearings = [d for d in os.listdir(cond_path) if os.path.isdir(os.path.join(cond_path, d))]
+def process_set(path, win_list, lbl_list, dom_list, dom_id):
+    if not os.path.exists(path): return
+    bearings = [d for d in os.listdir(path) if os.path.isdir(os.path.join(path, d))]
     for bearing in bearings:
-        raw_data, _ = process_motor_bearing(os.path.join(cond_path, bearing), [])
-        if raw_data is not None:
-            train_inputs.append(raw_data[:, :2])
-            s = raw_data[:, 2]
-            u_q = raw_data[:, 3]
-            u_d = raw_data[:, 4]
-            v = np.sqrt(u_q**2 + u_d**2)
-            train_speeds.append(s.reshape(-1, 1))
-            train_volts.append(v.reshape(-1, 1))
+        bearing_windows = load_femto_bearing(os.path.join(path, bearing))
+        if bearing_windows:
+            for idx, win in enumerate(bearing_windows):
+                win_list.append(win.T)
+                rul = 1.0 - (idx / len(bearing_windows))
+                lbl_list.append([rul, rul, 0.5, 0.5]) # [RUL, HI, Speed, Voltage]
+                dom_list.append(dom_id)
 
-if not train_inputs:
-    raise ValueError("No training data found to fit scaler!")
+print(f"Loading Learning_set for Training...")
+process_set(FEMTO_TRAIN_DIR, all_windows_train, all_labels_train, domain_labels_train, 0)
 
-print("Fitting Input Scaler (RobustScaler + Quantile)...")
-all_train_inputs = np.concatenate(train_inputs, axis=0)
-input_scaler.fit(all_train_inputs)
-quantile_transformer.fit(input_scaler.transform(all_train_inputs))
+print(f"Loading Test_set for Testing...")
+process_set(FEMTO_TEST_DIR, all_windows_test, all_labels_test, domain_labels_test, 0)
 
-print("Fitting Target Scalers (Speed, Voltage)...")
-speed_scaler.fit(np.concatenate(train_speeds, axis=0))
-voltage_scaler.fit(np.concatenate(train_volts, axis=0))
-print("✓ Scalers fitted.")
+print(f"Loading Full_Test_set for Validation...")
+process_set(FEMTO_VAL_DIR, all_windows_val, all_labels_val, domain_labels_val, 0)
 
-# Save scalers for dashboard inference
-import joblib
-os.makedirs('models', exist_ok=True)
-joblib.dump(input_scaler, os.path.join('models', 'input_scaler.pkl'))
-joblib.dump(quantile_transformer, os.path.join('models', 'quantile_transformer.pkl'))
-print("✓ Scalers saved (models/input_scaler.pkl, models/quantile_transformer.pkl)")
 
-print(f"\nStage 2: Processing datasets and generating windows...")
-
-domain_id_map = {"Condition 1": 0, "Condition 2": 1, "Condition 3": 2}
-
-for condition in CONDITIONS:
-    cond_path = os.path.join(DATASET_ROOT, condition)
-    if not os.path.exists(cond_path): continue
-    bearings = [d for d in os.listdir(cond_path) if os.path.isdir(os.path.join(cond_path, d))]
-    domain_id = domain_id_map[condition]
-    
-    for bearing in bearings:
-        bearing_path = os.path.join(cond_path, bearing)
-        raw_data, _ = process_motor_bearing(bearing_path, [])
-        if raw_data is None: continue
-        
-        # Per-run normalization
-        raw_vib = per_run_normalize(raw_data[:, :2])
-        inputs_robust = input_scaler.transform(raw_vib)
-        inputs_scaled = quantile_transformer.transform(inputs_robust)
-        
-        # Ensemble HI
-        hi = compute_ensemble_hi(inputs_scaled[:, 0], inputs_scaled[:, 1])
-        if len(hi) == 0: continue
-        
-        raw_speed = raw_data[:, 2].reshape(-1, 1)
-        scaled_speed = speed_scaler.transform(raw_speed).flatten()
-        raw_vq = raw_data[:, 3]
-        raw_vd = raw_data[:, 4]
-        raw_voltage = np.sqrt(raw_vq**2 + raw_vd**2).reshape(-1, 1)
-        scaled_voltage = voltage_scaler.transform(raw_voltage).flatten()
-        
-        num_samples = len(inputs_scaled)
-        rms_window = 1024
-        
-        for i in range(0, num_samples - WINDOW_SIZE - PREDICTION_HORIZON, STEP_SIZE):
-            window = inputs_scaled[i:i+WINDOW_SIZE]
-            future_idx = min((i + WINDOW_SIZE + PREDICTION_HORIZON) // rms_window, len(hi) - 1)
-            rul_val = 1.0 - hi[future_idx]
-            hi_val = hi[future_idx]
-            speed_val = np.mean(scaled_speed[i:i+WINDOW_SIZE])
-            volt_val = np.mean(scaled_voltage[i:i+WINDOW_SIZE])
-            
-            # Labels: [RUL, HI, Speed, Voltage]
-            label = [rul_val, hi_val, speed_val, volt_val]
-            
-            if condition in ["Condition 1", "Condition 2"]:
-                all_windows_train.append(window.T)
-                all_labels_train.append(label)
-                domain_labels_train.append(domain_id)
-            else:
-                all_windows_test.append(window.T)
-                all_labels_test.append(label)
-                domain_labels_test.append(domain_id)
-
-    gc.collect()
-
-X_train_val = np.array(all_windows_train)
-y_train_val = np.array(all_labels_train)
-d_train_val = np.array(domain_labels_train)
+X_train = np.array(all_windows_train)
+y_train = np.array(all_labels_train)
+d_train = np.array(domain_labels_train)
 
 X_test = np.array(all_windows_test)
 y_test = np.array(all_labels_test)
 d_test = np.array(domain_labels_test)
 
-X_train_raw, X_val, y_train_raw, y_val, d_train_raw, d_val = train_test_split(
-    X_train_val, y_train_val, d_train_val, test_size=0.15, random_state=42
-)
+X_val = np.array(all_windows_val)
+y_val = np.array(all_labels_val)
+d_val = np.array(domain_labels_val)
 
-print(f"Balancing training dataset...")
-X_train_bal, y_train_bal = balance_dataset(X_train_raw, y_train_raw)
-d_train_bal = np.concatenate([d_train_raw] * 3)[:len(X_train_bal)]
+print(f"Dataset Summary: Train: {X_train.shape}, Val: {X_val.shape}, Test: {X_test.shape}")
 
-print(f"Applying lightweight augmentation (memory-efficient)...")
-# Use single-pass lightweight augmentation instead of 6x heavy augmentation
-X_train, y_train = augment_data_light(X_train_bal, y_train_bal)
-d_train = d_train_bal  # No tile needed - same size
+# Scaling
+print("Applying Scaling...")
+scaler = RobustScaler()
+# Reshape for fitting: (N, C, L) -> (N*L, C)
+C = X_train.shape[1]
+L = X_train.shape[2]
+X_train_flat = X_train.transpose(0, 2, 1).reshape(-1, C)
+scaler.fit(X_train_flat)
 
-# Clear intermediate arrays to free memory
-del X_train_bal, y_train_bal, d_train_bal, all_windows_train, all_labels_train
+def apply_scaling(X, scaler):
+    N, C, L = X.shape
+    X_flat = X.transpose(0, 2, 1).reshape(-1, C)
+    X_scaled = scaler.transform(X_flat)
+    return X_scaled.reshape(N, L, C).transpose(0, 2, 1)
+
+X_train = apply_scaling(X_train, scaler)
+X_val = apply_scaling(X_val, scaler)
+X_test = apply_scaling(X_test, scaler)
+
+# Save the scaler for the dashboard
+import joblib
+os.makedirs('models', exist_ok=True)
+joblib.dump(scaler, os.path.join('models', 'input_scaler.pkl'))
+print(f"✓ Saved input scaler (3 channels) to models/input_scaler.pkl")
+
+X_train_raw, y_train_raw, d_train_raw = X_train, y_train, d_train 
+
+# Cleanup
+del all_windows_train, all_labels_train, all_windows_test, all_labels_test, all_windows_val, all_labels_val
 gc.collect()
 
-print(f"\nFinal Dataset Summary:")
-print(f"  Original Train Windows: {len(X_train_raw)}")
-print(f"  After Balancing + Augmentation: {X_train.shape}")
-print(f"  Validation: {X_val.shape}")
-print(f"  Test Pool (Cond 3): {X_test.shape}")
+# ============================================================================
+# PART 4.5: EXPLORATORY DATA ANALYSIS (EDA)
+# ============================================================================
+
+print("\n" + "="*80)
+print("PART 4.5: EXPLORATORY DATA ANALYSIS (EDA)")
+print("="*80)
+
+os.makedirs('output', exist_ok=True)
+
+# 1. Sample Signal Visualization (Healthy vs Late Stage)
+print("Generating sample signal plots...")
+fig, axes = plt.subplots(3, 2, figsize=(15, 12))
+sample_idx_early = 0
+sample_idx_late = len(X_train) // 4 # FEMTO data usually at start
+
+# Early stage
+axes[0, 0].plot(X_train[sample_idx_early, 0, :], color='blue', alpha=0.7)
+axes[0, 0].set_title('Early Stage Signal (Vib H)')
+axes[1, 0].plot(X_train[sample_idx_early, 1, :], color='green', alpha=0.7)
+axes[1, 0].set_title('Early Stage Signal (Vib V)')
+axes[2, 0].plot(X_train[sample_idx_early, 2, :], color='red', alpha=0.7)
+axes[2, 0].set_title('Early Stage Signal (Temp)')
+
+# Late stage
+axes[0, 1].plot(X_train[sample_idx_late, 0, :], color='blue', alpha=0.7)
+axes[0, 1].set_title('Degraded Stage Signal (Vib H)')
+axes[1, 1].plot(X_train[sample_idx_late, 1, :], color='green', alpha=0.7)
+axes[1, 1].set_title('Degraded Stage Signal (Vib V)')
+axes[2, 1].plot(X_train[sample_idx_late, 2, :], color='red', alpha=0.7)
+axes[2, 1].set_title('Degraded Stage Signal (Temp)')
+
+plt.tight_layout()
+plt.savefig(os.path.join('output', 'eda_01_sample_signals.png'), dpi=150)
+plt.close()
+
+# 2. Power Spectral Density (PSD)
+print("Generating frequency domain analysis...")
+from scipy import signal
+fig, axes = plt.subplots(1, 2, figsize=(15, 5))
+f, psd_early = signal.welch(X_train[sample_idx_early, 0, :], fs=25600)
+f, psd_late = signal.welch(X_train[sample_idx_late, 0, :], fs=25600)
+
+axes[0].semilogy(f, psd_early)
+axes[0].set_title('PSD Early Stage (Vib H)')
+axes[0].set_xlabel('Frequency [Hz]')
+axes[1].semilogy(f, psd_late)
+axes[1].set_title('PSD Degraded Stage (Vib H)')
+axes[1].set_xlabel('Frequency [Hz]')
+plt.tight_layout()
+plt.savefig(os.path.join('output', 'eda_02_frequency_analysis.png'), dpi=150)
+plt.close()
+
+# 3. Label Distributions
+print("Generating label distribution plots...")
+fig, axes = plt.subplots(1, 2, figsize=(15, 5))
+axes[0].hist(y_train[:, 0], bins=50, color='skyblue', edgecolor='black')
+axes[0].set_title('RUL Distribution (Train)')
+axes[1].hist(y_train[:, 1], bins=50, color='salmon', edgecolor='black')
+axes[1].set_title('Health Indicator Distribution (Train)')
+plt.tight_layout()
+plt.savefig(os.path.join('output', 'eda_03_label_distributions.png'), dpi=150)
+plt.close()
+
+# 4. Correlation Heatmap (Mean features)
+print("Generating feature correlation heatmap...")
+mean_features = np.mean(X_train, axis=2)
+df_corr = pd.DataFrame(mean_features, columns=['Mean_VibH', 'Mean_VibV', 'Mean_Temp'])
+df_corr['RUL'] = y_train[:, 0]
+df_corr['HI'] = y_train[:, 1]
+
+plt.figure(figsize=(10, 8))
+sns.heatmap(df_corr.corr(), annot=True, cmap='coolwarm', fmt=".2f")
+plt.title('Feature & Label Correlations')
+plt.savefig(os.path.join('output', 'eda_04_correlation_heatmap.png'), dpi=150)
+plt.close()
+
+print("✓ EDA plots saved in 'output/' directory.")
+
+
 
 # ============================================================================
 # PART 5: HYBRID MSCAN + TRANSFORMER MODEL WITH DOMAIN ADAPTATION
@@ -577,20 +609,12 @@ class MSCAN_Hybrid(nn.Module):
         self.speed_head = nn.Linear(64, 1)
         self.voltage_head = nn.Linear(64, 1)
         
-        # Domain discriminator (DANN)
-        self.grl = GradientReversalLayer(alpha=1.0)
-        self.domain_classifier = nn.Sequential(
-            nn.Linear(ms_channels, 32),
-            nn.ReLU(),
-            nn.Dropout(0.3),
-            nn.Linear(32, 3)  # 3 domains
-        )
-        
         self.relu = nn.ReLU()
         self.dropout = nn.Dropout(dropout_rate)
         self.sigmoid = nn.Sigmoid()
+
     
-    def forward(self, x, return_domain=False):
+    def forward(self, x):
         # Parallel branches - NO BN here to preserve absolute vibration magnitude information
         x1 = self.relu(self.conv1x1(x))
         x2 = self.relu(self.conv3x3(x))
@@ -637,12 +661,8 @@ class MSCAN_Hybrid(nn.Module):
         
         out = torch.cat([rul_quantiles, hi_pred, speed_pred, voltage_pred], dim=1)
         
-        if return_domain:
-            x_global = self.global_pool(x_tcn).view(x_tcn.size(0), -1)
-            domain_out = self.domain_classifier(self.grl(x_global))
-            return out, domain_out
-        
         return out
+
 
 # ============================================================================
 # PART 6: LOSS FUNCTIONS
@@ -671,7 +691,7 @@ class MultiTaskLoss(nn.Module):
         # Learnable task weights
         self.log_vars = nn.Parameter(torch.zeros(4))
     
-    def forward(self, preds, targets, domain_preds=None, domain_targets=None):
+    def forward(self, preds, targets):
         num_q = 3
         rul_pred = preds[:, :num_q]
         hi_pred = preds[:, num_q:num_q+1]
@@ -699,17 +719,13 @@ class MultiTaskLoss(nn.Module):
                      precision2 * loss_speed + self.log_vars[2] +
                      precision3 * loss_voltage + self.log_vars[3])
         
-        # Domain adaptation loss
-        if domain_preds is not None and domain_targets is not None:
-            domain_loss = self.ce(domain_preds, domain_targets)
-            total_loss = total_loss + 0.1 * domain_loss
-        
         return total_loss, {
             'rul': loss_rul.item(),
             'hi': loss_hi.item(),
             'speed': loss_speed.item(),
             'voltage': loss_voltage.item()
         }
+
 
 # Initialize model
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -772,7 +788,7 @@ print("\n" + "="*80)
 print("PART 8: MODEL TRAINING")
 print("="*80)
 
-NUM_EPOCHS = 30
+NUM_EPOCHS = 50
 best_val_loss = float('inf')
 patience = 15
 patience_counter = 0
@@ -787,14 +803,13 @@ for epoch in range(NUM_EPOCHS):
     model.train()
     train_loss = 0.0
     
-    for batch_x, batch_y, batch_d in train_loader:
+    for batch_x, batch_y, _ in train_loader:
         batch_x = batch_x.to(device)
         batch_y = batch_y.to(device)
-        batch_d = batch_d.to(device)
         
         optimizer.zero_grad()
-        outputs, domain_out = model(batch_x, return_domain=True)
-        loss, loss_dict = criterion(outputs, batch_y, domain_out, batch_d)
+        outputs = model(batch_x)
+        loss, loss_dict = criterion(outputs, batch_y)
         loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
         optimizer.step()
@@ -811,14 +826,14 @@ for epoch in range(NUM_EPOCHS):
     val_mae = 0.0
     
     with torch.no_grad():
-        for batch_x, batch_y, batch_d in val_loader:
+        for batch_x, batch_y, _ in val_loader:
             batch_x = batch_x.to(device)
             batch_y = batch_y.to(device)
-            batch_d = batch_d.to(device)
             outputs = model(batch_x)
             loss, _ = criterion(outputs, batch_y)
             val_loss += loss.item()
             val_mae += torch.mean(torch.abs(outputs[:, 1] - batch_y[:, 0])).item()
+
     
     val_loss /= len(val_loader)
     val_mae /= len(val_loader)
@@ -961,11 +976,77 @@ residuals = test_targets[:, 0] - test_predictions[:, 1]
 axes[2, 1].hist(residuals, bins=50, color='purple', alpha=0.7)
 axes[2, 1].set_title('RUL Residuals Distribution')
 
+# Static plot
 plt.tight_layout()
 os.makedirs('output', exist_ok=True)
 plt.savefig(os.path.join('output', '03_multi_output_results.png'), dpi=150)
 print("✓ Saved: output/03_multi_output_results.png")
 plt.close()
+
+# Interactive Plotly Visualization
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+
+print("\nGenerating Interactive Visualizations...")
+
+fig_inter = make_subplots(
+    rows=3, cols=2,
+    subplot_titles=(
+        'RUL Prediction with Uncertainty', 'Training History',
+        'HI Reconstruction', 'Motor Speed Prediction',
+        'Voltage Prediction', 'RUL Residuals Distribution'
+    )
+)
+
+# RUL with Uncertainty
+fig_inter.add_trace(go.Scatter(
+    x=list(range(500)), y=test_predictions[:500, 1],
+    mode='lines', name='Predicted (Median)', line=dict(color='red')
+), row=1, col=1)
+fig_inter.add_trace(go.Scatter(
+    x=list(range(500)), y=test_targets[:500, 0],
+    mode='lines', name='Actual', line=dict(color='blue', dash='dash')
+), row=1, col=1)
+fig_inter.add_trace(go.Scatter(
+    x=list(range(500)) + list(range(500))[::-1],
+    y=list(test_predictions[:500, 2]) + list(test_predictions[:500, 0])[::-1],
+    fill='toself', fillcolor='rgba(255,0,0,0.2)',
+    line=dict(color='rgba(255,255,255,0)'),
+    name='80% Confidence Interval', showlegend=True
+), row=1, col=1)
+
+# Training History
+fig_inter.add_trace(go.Scatter(y=history['train_loss'], name='Train Loss'), row=1, col=2)
+fig_inter.add_trace(go.Scatter(y=history['val_loss'], name='Val Loss'), row=1, col=2)
+
+# HI
+fig_inter.add_trace(go.Scatter(
+    x=test_targets[:, 1], y=test_predictions[:, 3],
+    mode='markers', marker=dict(size=4, opacity=0.5), name='HI'
+), row=2, col=1)
+fig_inter.add_trace(go.Scatter(x=[0, 1], y=[0, 1], mode='lines', line=dict(dash='dash', color='black'), showlegend=False), row=2, col=1)
+
+# Speed
+fig_inter.add_trace(go.Scatter(
+    x=test_targets[:, 2], y=test_predictions[:, 4],
+    mode='markers', marker=dict(size=4, opacity=0.5, color='green'), name='Speed'
+), row=2, col=2)
+fig_inter.add_trace(go.Scatter(x=[0, 1], y=[0, 1], mode='lines', line=dict(dash='dash', color='black'), showlegend=False), row=2, col=2)
+
+# Voltage
+fig_inter.add_trace(go.Scatter(
+    x=test_targets[:, 3], y=test_predictions[:, 5],
+    mode='markers', marker=dict(size=4, opacity=0.5, color='orange'), name='Voltage'
+), row=3, col=1)
+fig_inter.add_trace(go.Scatter(x=[0, 1], y=[0, 1], mode='lines', line=dict(dash='dash', color='black'), showlegend=False), row=3, col=1)
+
+# Residuals
+fig_inter.add_trace(go.Histogram(x=residuals, nbinsx=50, marker_color='purple', name='Residuals'), row=3, col=2)
+
+fig_inter.update_layout(height=1200, width=1200, title_text="MSCAN Hybrid Multi-Task Model Interactive Report", showlegend=True)
+fig_inter.write_html(os.path.join('output', 'interactive_results.html'))
+print("✓ Saved Interactive Report: output/interactive_results.html")
+
 
 # ============================================================================
 # PART 11: SUMMARY
