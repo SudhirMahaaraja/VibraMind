@@ -4,7 +4,7 @@
 ![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)
 ![PyTorch](https://img.shields.io/badge/PyTorch-2.0+-ee4c2c.svg)
 ![Flask](https://img.shields.io/badge/Flask-3.0-000000.svg)
-![License](https://img.shields.io/badge/License-MIT-green.svg)
+![Plotly](https://img.shields.io/badge/Plotly-6.5-636efa.svg)
 
 **VibraMind** is a state-of-the-art predictive maintenance system designed for industrial motor bearings. It utilizes a hybrid Deep Learning architecture combining **Multi-Scale CNNs (MSCAN)**, **Temporal Convolutional Networks (TCN)**, and **Transformers** to predict Remaining Useful Life (RUL) with high precision and uncertainty quantification.
 
@@ -16,68 +16,79 @@
     - **RUL**: Remaining Useful Life percentage.
     - **Health Indicator (HI)**: An ensemble metric (RMS, Kurtosis, Crest Factor, Spectral Energy).
     - **Operating Conditions**: Real-time Motor Speed and Voltage Load.
-- **Domain Adaptation (DANN)**: Implements a Gradient Reversal Layer to ensure the model generalizes across different operating conditions (Condition 1, 2, and 3).
-- **Memory-Efficient Pipeline**: On-the-fly data augmentation and lightweight processing to handle large vibration datasets without crashing system memory.
-- **Solar UI Dashboard**: A premium, high-contrast light-mode dashboard (Cream, Orange, Brown palette) for real-time monitoring and manual file analysis.
+- **Interactive Visualizations**: 
+    - **Live Signal Chart**: Real-time Plotly charts in the dashboard for Vib H, Vib V, and Temperature.
+    - **Full Interactive Report**: Comprehensive training analysis via a standalone HTML report.
+- **Automated EDA**: Generates signal comparisons, frequency domain analysis (PSD), and correlation heatmaps during training.
+- **Memory-Efficient Pipeline**: On-the-fly data augmentation and lightweight processing to handle large vibration datasets.
+- **Modern Dashboard**: A premium, high-contrast dark-styled dashboard for real-time monitoring and file analysis.
 
 ## 🛠️ Tech Stack
 
 - **Core**: Python 3.10
 - **Deep Learning**: PyTorch (CUDA supported)
-- **Data Science**: NumPy, Pandas, Scikit-Learn (RobustScaler, QuantileTransformer)
+- **Data Science**: NumPy, Pandas, Scikit-Learn (RobustScaler), SciPy (Signal)
 - **Web Interface**: Flask, Jinja2, Bootstrap 5
-- **Visualization**: Matplotlib, Seaborn
+- **Visualization**: Plotly.js, Matplotlib, Seaborn
 
 ## 📁 Project Structure
 
 ```text
 ├── dashboard/              # Flask Application & Web Assets
-│   ├── static/             # CSS (Solar Theme), JS (Inference Logic)
+│   ├── static/             # CSS (Solar Theme), JS (Inference & Plotly logic)
 │   ├── templates/          # HTML5 UI
 │   └── app.py              # Backend API & Model Inference
 ├── models/                 # Saved Model Weights & Preprocessing Scalers
 │   ├── best_mscan_model.pth
-│   ├── input_scaler.pkl
-│   └── quantile_transformer.pkl
+│   └── input_scaler.pkl
 ├── scripts/                # Utility Scripts
-│   ├── eda_analysis.py     # exploratory data analysis
-│   └── processing.py       # Data cleaning and merging
+│   └── generate_samples.py # Test data generator (Healthy, Degraded, Critical)
 ├── samples/                # Sample CSVs for Dashboard Testing
-├── output/                 # Training plots and evaluation logs
-├── main.py                 # Core Training & Validation Pipeline
-└── requirements.txt        # Minimal dependencies
+├── output/                 # Training plots, EDA, and Interactive Reports
+│   ├── eda_01_sample_signals.png
+│   ├── interactive_results.html
+│   └── multi_task_summary.txt
+├── main.py                 # Core Training & EDA Pipeline
+└── requirements.txt        # Dependencies
 ```
 
 ## ⚙️ Installation & Setup
 
 1. **Clone the repository**:
    ```bash
-   git clone https://github.com/YourUsername/VibraMind-AI.git
-   cd VibraMind-AI
+   git clone https://github.com/SudhirMahaaraja/VibraMind.git
+   cd VibraMind
    ```
 
-2. **Create a Virtual Environment**:
-   ```bash
+2. **Create and Activate Virtual Environment**:
+   ```powershell
    python -m venv .venv
-   source .venv/bin/Scripts/activate  # Windows: .\.venv\Scripts\Activate.ps1
+   .\.venv\Scripts\Activate.ps1
    ```
 
 3. **Install Dependencies**:
    ```bash
-   pip install -r requirements.txt
+   pip install flask torch torchvision torchaudio pandas numpy scikit-learn matplotlib seaborn joblib plotly scipy
    ```
 
 ## 🚄 Usage
 
-### 1. Training the Model
-To train the hybrid model from scratch using the FEMTO/PRONOSTIA vibration datasets:
+### 1. Generating Test Data
+To create sample CSV files for testing the dashboard:
+```bash
+python scripts/generate_samples.py
+```
+This creates `test_healthy.csv`, `test_degraded.csv`, and `test_critical.csv` in the `samples/` folder.
+
+### 2. Training the Model
+To perform EDA and train the hybrid model on the FEMTO dataset:
 ```bash
 python main.py
 ```
-*Note: This will automatically generate scalers in `models/` and performance plots in `output/`.*
+*Note: This generates the interactive HTML report in `output/` and fits the `RobustScaler`.*
 
-### 2. Launching the Dashboard
-To start the web interface for real-time analysis:
+### 3. Launching the Dashboard
+To start the web interface:
 ```bash
 python dashboard/app.py
 ```
@@ -86,11 +97,13 @@ Then visit `http://127.0.0.1:5000` in your browser.
 ## 🧠 Model Architecture
 
 The core model, `MSCAN_Hybrid`, features:
-- **MSCAN Encoder**: Three parallel branches with 3x3, 5x5, and 7x7 kernels for multi-scale vibration feature extraction.
-- **TCN Blocks**: Dilated convolutions to capture temporal patterns across the 5120-sample windows.
-- **Transformer Encoder**: Lightweight attention mechanism to weight the most critical degradation patterns.
-- **Quantile Heads**: Outputs 3 values for RUL to calculate predictive intervals.
+- **MSCAN Encoder**: Four parallel branches with 1x1, 3x3, 5x5, and 7x7 kernels for multi-scale vibration feature extraction.
+- **TCN Blocks**: Dilated convolutions (dilation 1, 2, 4) to capture temporal patterns.
+- **Lightweight Transformer**: Positional encoding and attention mechanism for long-range dependency modeling.
+- **Quantile Regression**: Outputs 10th, 50th, and 90th percentiles for robust uncertainty quantification.
 
-## 📊 Results
-The model achieves high accuracy in Health Indicator reconstruction (R² > 0.90) and provides robust RUL estimations even on unseen operating conditions through its Domain Adaptation layer.
-
+## 📊 Results & EDA
+The system automatically generates an Exploratory Data Analysis (EDA) suite including:
+- **Time Domain**: Comparisons between healthy and degraded bearings.
+- **Frequency Domain**: PSD analysis showing energy shifts at failure.
+- **Visual Report**: Interactive Plotly-based training history and prediction metrics.
